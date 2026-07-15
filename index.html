@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MDC Post-Test - Teacher Portal</title>
+<script>
+  let questionListRequestId = 0;
+
+async function loadQuestionList(){
+  const testType = document.getElementById("qTest")?.value || "";
+  const select = document.getElementById("savedQuestionSelect");
+
+  if(!select || !testType) return;
+
+  const requestId = ++questionListRequestId;
+
+  select.innerHTML = `<option value="">-- pilih soal --</option>`;
+  select.disabled = true;
+
+  try{
+    const res = await api({
+      action: "questionList",
+      test_type: testType
+    });
+
+    if(requestId !== questionListRequestId) return;
+
+    select.innerHTML = `<option value="">-- pilih soal --</option>`;
+
+    if(!res.success || !Array.isArray(res.data)) return;
+
+    const seen = new Set();
+
+    res.data.forEach(q=>{
+      const id = String(q.question_id || "").trim();
+
+      if(!id || seen.has(id)) return;
+      seen.add(id);
+
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent =
+        `${id} | No. ${q.question_number} | ${q.question_type} | ` +
+        String(q.question_html || "")
+          .replace(/\s+/g, " ")
+          .slice(0,45);
+
+      select.appendChild(opt);
+    });
+
+  }catch(err){
+    if(requestId === questionListRequestId){
+      console.error("Gagal memuat bank soal:", err);
+      select.innerHTML = `<option value="">-- gagal memuat soal --</option>`;
+    }
+  }finally{
+    if(requestId === questionListRequestId){
+      select.disabled = false;
+    }
+  }
+}
+
+async function loadSelectedQuestion(){
+  const testType = document.getElementById("qTest").value;
+  const questionId = document.getElementById("savedQuestionSelect").value;
+
+  if(!questionId){
+    alert("Pilih soal dulu.");
+    return;
+  }
+
+  const res = await api({
+    action: "questionDetail",
+    test_type: testType,
+    question_id: questionId
+  });
+
+  if(!res.success){
+    alert(res.message || "Gagal memuat soal.");
+    return;
+  }
+
+  const q = res.data;
+
+  document.getElementById("qNumber").value = q.question_number || 1;
+  document.getElementById("qId").value = q.question_id || (
+    getQuestionPrefix() + String(q.question_number || 1).padStart(3, "0")
+  );
+  document.getElementById("qType").value = q.question_type || "MC";
+  setRichEditorHtml(q.question_html || "");
+  document.getElementById("qMedia").value = q.media_url || "";
+
+  document.getElementById("optA").value = q.option_a || "";
+  document.getElementById("optB").value = q.option_b || "";
+  document.getElementById("optC").value = q.option_c || "";
+  document.getElementById("optD").value = q.option_d || "";
+  document.getElementById("optE").value = q.option_e || "";
+
+  const correctEl =
+  document.getElementById("correctAnswer") ||
+  document.getElementById("qCorrect") ||
+  document.getElementById("qAnswer") ||
+  document.getElementById("correct_answer");
+
+if(correctEl){
+  const correctValue = String(q.correct_answer || "").trim().toUpperCase();
+  correctEl.value = correctValue;
+}
+
+  if(document.getElementById("qPoint")){
+    document.getElementById("qPoint").value = q.point || 1;
+  }
+
+  if(document.getElementById("isActive")){
+    document.getElementById("isActive").value = String(q.is_active).toUpperCase() === "FALSE" ? "FALSE" : "TRUE";
+  }
+
+  if(typeof handleQuestionTypeChange === "function"){
+    handleQuestionTypeChange();
+  }
+
+  previewQuestion();
+
+  const btn = document.getElementById("saveQuestionBtn");
+  if(btn){
+    btn.textContent = "Update Soal";
+    btn.dataset.mode = "edit";
+  }
+
+  alert("Soal berhasil dimuat. Setelah edit, klik Update Soal.");
+}
+window.MathJax = {
+  tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['\\[','\\]']] },
+  svg: { fontCache: 'global' }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<style>
+:root{--blue:#2f80ed;--dark:#1f2d3d;--soft:#f4f7fb;--muted:#7b8794;--green:#2ecc71;--line:#dbe5f0}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--soft);color:var(--dark)}
+.page{min-height:100vh;display:flex}.sidebar{width:245px;background:#eaf3ff;padding:24px 18px;border-right:1px solid #d8e7fa;position:sticky;top:0;height:100vh}
+.logo{font-weight:800;font-size:26px;color:#1b5fae}.sublogo{font-size:13px;color:#4c6f91;margin:8px 0 28px}
+.menu{background:#fff;border-radius:16px;padding:12px;box-shadow:0 8px 28px rgba(31,45,61,.06)}.menu-item{padding:13px 14px;border-radius:12px;font-weight:700;margin-bottom:8px;color:#49627a;cursor:pointer}.menu-item.active{background:#e9f3ff;color:#1b5fae}
+.main{flex:1;padding:28px}.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}.title h1{margin:0;font-size:27px}.title p{margin:6px 0 0;color:var(--muted)}
+.card{background:#fff;border-radius:22px;padding:24px;box-shadow:0 8px 28px rgba(31,45,61,.08);margin-bottom:20px}
+.status-pill{padding:9px 14px;border-radius:999px;background:#eef3f8;font-weight:800;color:#4f6172}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.test-card{border:2px solid #e1e9f2;border-radius:20px;padding:20px;background:#fff}
+.test-card h2{margin:0 0 8px;font-size:24px}.test-card p{margin:0 0 18px;color:var(--muted)}
+.badge{display:inline-block;padding:8px 12px;border-radius:999px;font-size:13px;font-weight:800;margin-bottom:15px;background:#edf2f7;color:#5a6d7f}
+.badge.running{background:#e9f3ff;color:#1b5fae}.badge.finished{background:#dcf8e7;color:#207a43}.badge.waiting{background:#fff6d8;color:#8a6500}
+.btns{display:flex;flex-direction:column;gap:10px}button{border:0;border-radius:12px;padding:13px 14px;font-weight:800;cursor:pointer}
+.btn-wait{background:#fff6d8;color:#8a6500}.btn-start{background:var(--blue);color:#fff}.btn-finish{background:#dcf8e7;color:#207a43}.btn-reset{background:#ffe5e2;color:#c0392b}.btn-secondary{background:#e8eef5;color:#1f2d3d}
+.btn-dark{background:#1f2d3d;color:#fff}.btn-mini{padding:8px 10px;border-radius:9px;font-size:12px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}input,select,textarea{padding:13px;border:1px solid #d8e0ea;border-radius:12px;font-size:16px;background:#fff}textarea{width:100%;min-height:110px;resize:vertical;line-height:1.5}
+.small{font-size:13px;color:var(--muted)}.table{width:100%;border-collapse:collapse;margin-top:12px}.table th,.table td{padding:12px;border-bottom:1px solid #edf1f5;text-align:left;font-size:14px}.table th{color:#617184;background:#f7f9fc}
+.alert{padding:13px 16px;border-radius:14px;background:#f7f9fc;color:#415466;font-weight:700}.hidden{display:none!important}
+.section{display:none}.section.active{display:block}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.form-full{grid-column:1/-1}label{font-size:13px;font-weight:800;color:#34495e;display:block;margin:0 0 7px}
+.preview-box{border:2px dashed var(--line);border-radius:18px;padding:20px;background:#fbfdff;min-height:180px}.question-preview{font-size:19px;line-height:1.55;margin-bottom:16px}.option-preview{border:1px solid #d8e0ea;border-radius:12px;padding:12px;margin:8px 0;background:#fff}.media-preview{max-width:100%;max-height:260px;border-radius:14px;margin:10px 0;border:1px solid #e5edf5}
+.help{background:#f7f9fc;border-left:4px solid var(--blue);padding:14px;border-radius:12px;margin-top:10px}
+
+.essay-filter-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:14px;align-items:end}
+.essay-filter-grid select,.essay-filter-grid input{width:100%}
+.essay-layout{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start}
+.essay-question-card{border:1px solid var(--line);border-radius:18px;padding:20px;background:#fbfdff}
+.essay-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.essay-chip{display:inline-block;padding:7px 10px;border-radius:999px;background:#eaf3ff;color:#1b5fae;font-size:12px;font-weight:800}
+.essay-chip.done{background:#dcf8e7;color:#207a43}
+.essay-question{font-size:18px;line-height:1.65;margin:12px 0 18px}
+.essay-answer{white-space:pre-wrap;line-height:1.65;border:1px solid #d8e0ea;background:#fff;border-radius:14px;padding:16px;min-height:120px}
+.essay-score-panel{border:1px solid var(--line);border-radius:18px;padding:18px;background:#fff;position:sticky;top:18px}
+.essay-score-panel input,.essay-score-panel textarea{width:100%}
+.essay-nav{display:flex;justify-content:space-between;gap:10px;margin-top:16px}
+.essay-empty{text-align:center;padding:46px 20px;color:var(--muted)}
+.essay-progress{font-weight:800;color:#49627a;margin-top:8px}
+@media(max-width:1050px){.essay-filter-grid{grid-template-columns:1fr 1fr}.essay-layout{grid-template-columns:1fr}.essay-score-panel{position:static}}
+@media(max-width:900px){.page{display:block}.sidebar{width:100%;height:auto;position:relative;border-right:0}.main{padding:16px}.grid,.form-grid{grid-template-columns:1fr}}
+
+.rich-toolbar{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:9px;
+  border:1px solid #dbe5f0;
+  border-bottom:none;
+  border-radius:12px 12px 0 0;
+  background:#f7f9fc;
+}
+.rich-toolbar button{
+  min-width:38px;
+  height:34px;
+  padding:0 10px;
+  border:1px solid #d6e0eb;
+  border-radius:8px;
+  background:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+.rich-toolbar button:hover{background:#eaf3ff;border-color:#9fc5f8}
+.rich-editor{
+  min-height:145px;
+  width:100%;
+  padding:14px;
+  border:1px solid #dbe5f0;
+  border-radius:0 0 12px 12px;
+  background:#fff;
+  outline:none;
+  font-family:inherit;
+  font-size:15px;
+  line-height:1.6;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.rich-editor:focus{
+  border-color:#2f80ed;
+  box-shadow:0 0 0 3px rgba(47,128,237,.10);
+}
+.rich-editor:empty:before{
+  content:attr(data-placeholder);
+  color:#8a98a8;
+  pointer-events:none;
+}
+.question-preview p{margin:0 0 10px}
+.question-preview ul,.question-preview ol{padding-left:24px}
+
+
+/* ===== REPORT DETAIL & PRINT ===== */
+.report-header-row{display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap}
+.report-actions{display:flex;gap:10px;flex-wrap:wrap}
+.report-filter-grid{display:grid;grid-template-columns:minmax(240px,1fr) minmax(180px,320px);gap:16px;margin-top:20px}
+.report-filter-grid select{width:100%}
+.report-empty{text-align:center;color:var(--muted);padding:48px 24px}
+.report-print-area{display:flex;flex-direction:column;gap:22px}
+.report-page{background:#fff;border-radius:22px;padding:28px;box-shadow:0 8px 28px rgba(31,45,61,.08);min-height:980px;position:relative;overflow:hidden}
+.report-page.preview-hidden{display:none}
+.report-doc-head{display:grid;grid-template-columns:84px 1fr;gap:18px;align-items:center;border-bottom:3px solid #1b5fae;padding-bottom:16px;margin-bottom:18px}
+.report-logo-box{width:76px;height:76px;border-radius:18px;background:#eaf3ff;color:#1b5fae;font-weight:900;font-size:24px;display:flex;align-items:center;justify-content:center;border:1px solid #cfe2fb}
+.report-doc-title{text-align:center}
+.report-doc-title h1{font-size:23px;margin:0 0 6px;color:#102a43}
+.report-doc-title p{margin:0;color:#60758a;font-size:13px}
+.report-student-info{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;background:#f7f9fc;border-radius:14px;padding:14px 16px;margin-bottom:18px}
+.report-info-item{display:grid;grid-template-columns:120px 12px 1fr;font-size:14px;line-height:1.5}
+.report-info-item b{color:#24435f}
+.report-summary{display:grid;grid-template-columns:160px 1fr;gap:18px;align-items:center;border:1px solid #dbe5f0;border-radius:18px;padding:18px;margin-bottom:18px}
+.report-score-circle{width:132px;height:132px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#eaf3ff,#fff);border:8px solid #d6e9ff;margin:auto}
+.report-score-circle .value{font-size:34px;font-weight:900;color:#1b5fae;line-height:1}
+.report-score-circle .label{font-size:12px;color:#6f8092;margin-top:7px}
+.report-category h3{font-size:24px;margin:0 0 8px;color:#163a5f}
+.report-category p{margin:0;color:#5f7183;line-height:1.55}
+.report-section-title{font-size:18px;margin:20px 0 10px;padding-bottom:8px;border-bottom:2px solid #dbe5f0;color:#163a5f}
+.report-material-table{width:100%;border-collapse:collapse;font-size:13px}
+.report-material-table th,.report-material-table td{border:1px solid #dbe5f0;padding:10px;vertical-align:top}
+.report-material-table th{background:#eef5fc;color:#24435f;text-align:left}
+.report-material-name{font-weight:800;color:#20384f}
+.level-dots{white-space:nowrap;font-size:17px;letter-spacing:2px;color:#cbd7e4}
+.level-dots .on{color:#2f80ed}
+.report-submaterials{margin:7px 0 0;padding-left:18px;color:#53687d}
+.report-submaterials li{margin:4px 0}
+.report-note{margin-top:18px;padding:14px 16px;border-left:4px solid #2f80ed;background:#f5f9ff;border-radius:10px;color:#425970;line-height:1.55;font-size:13px}
+.character-scale{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:16px 0}
+.character-scale-item{border-radius:14px;padding:14px;border:1px solid #dbe5f0;background:#fbfdff}
+.character-scale-item strong{display:block;margin-bottom:5px}
+.character-scale-item.active{outline:3px solid #2f80ed;background:#eef6ff}
+.character-interpretation{font-size:16px;line-height:1.7;background:#f7f9fc;border-radius:16px;padding:18px;border:1px solid #dbe5f0}
+.report-footer{position:absolute;left:28px;right:28px;bottom:20px;border-top:1px solid #dbe5f0;padding-top:8px;display:flex;justify-content:space-between;font-size:11px;color:#8190a0}
+@media(max-width:900px){
+  .report-filter-grid,.report-student-info,.report-summary{grid-template-columns:1fr}
+  .report-info-item{grid-template-columns:100px 12px 1fr}
+  .character-scale{grid-template-columns:1fr}
+  .report-page{min-height:auto}
+  .report-footer{position:static;margin-top:24px}
+}
+@media print{
+  @page{size:A4 portrait;margin:10mm}
+  body{background:#fff!important}
+  .sidebar,.topbar,.no-print,#reportEmpty{display:none!important}
+  .page,.main{display:block!important;width:100%!important;padding:0!important;margin:0!important}
+  .section{display:none!important}
+  #report{display:block!important;width:100%!important;padding:0!important;margin:0!important}
+  #reportPrintArea{display:block!important;width:100%!important;padding:0!important;margin:0!important}
+  .report-print-area{gap:0!important}
+  .report-page{display:block!important;box-shadow:none!important;border-radius:0!important;min-height:277mm!important;height:277mm!important;padding:12mm!important;margin:0!important;page-break-after:always!important;break-after:page!important;overflow:hidden!important}
+  .report-page:last-child{page-break-after:auto!important;break-after:auto!important}
+  .report-doc-head{margin-bottom:12px}
+  .report-material-table{font-size:11px}
+  .report-material-table th,.report-material-table td{padding:7px}
+  .report-section-title{margin:14px 0 8px}
+  .report-note{font-size:11px;margin-top:12px}
+  .report-footer{left:12mm;right:12mm;bottom:8mm}
+}
+
+</style>
+</head>
+<body>
+<div class="page">
+<aside class="sidebar">
+<div class="logo">MDC</div><div class="sublogo">Teacher Control Portal</div>
+<div class="menu">
+<div class="menu-item active" onclick="showSection('dashboard',this)">Dashboard</div>
+<div class="menu-item" onclick="showSection('questions',this)">Input Soal</div>
+<div class="menu-item" onclick="showSection('participants',this)">Participants</div>
+<div class="menu-item" onclick="showSection('essayScoring',this)">Penilaian Essay</div>
+<div class="menu-item" onclick="showSection('report',this)">Report</div>
+</div>
+</aside>
+<main class="main">
+<div class="topbar"><div class="title"><h1>MDC Post-Test System</h1><p>Panel Guru Post-Test — kontrol tes, input soal, penilaian essay, dan report</p></div><div class="status-pill" id="statusPill">Memuat...</div></div>
+
+<section id="dashboard" class="section active">
+<div class="card"><div class="row"><input id="teacherPin" type="password" placeholder="PIN Guru" value="mdc2026"><button class="btn-secondary" onclick="loadAll()">Refresh Data</button><button class="btn-reset" onclick="resetToNone()">Reset ke NONE</button></div><p class="small">PIN guru dipakai untuk aksi kontrol dan simpan soal.</p><div id="message" class="alert hidden"></div></div>
+<div class="grid">
+<div class="test-card"><span class="badge" id="badgeNUMERASI">Menunggu</span><h2>Numerasi</h2><p>Kontrol sesi tes Numerasi.</p><div class="btns"><button class="btn-wait" onclick="setTest('NUMERASI','WAITING')">Prepare / Waiting Numerasi</button><button class="btn-start" onclick="setTest('NUMERASI','RUNNING')">Start Numerasi</button><button class="btn-finish" onclick="setTest('NUMERASI','FINISHED')">Finish Numerasi</button></div></div>
+<div class="test-card"><span class="badge" id="badgeLITERASI">Menunggu</span><h2>Literasi</h2><p>Kontrol sesi tes Literasi.</p><div class="btns"><button class="btn-wait" onclick="setTest('LITERASI','WAITING')">Prepare / Waiting Literasi</button><button class="btn-start" onclick="setTest('LITERASI','RUNNING')">Start Literasi</button><button class="btn-finish" onclick="setTest('LITERASI','FINISHED')">Finish Literasi</button></div></div>
+
+</div>
+</section>
+
+<section id="questions" class="section">
+<div class="card">
+<h2>Input Soal Guru</h2>
+<div class="row" style="margin:14px 0 22px;">
+  <div>
+    <label>Pilih Soal Tersimpan</label>
+    <select id="savedQuestionSelect">
+      <option value="">-- pilih soal --</option>
+    </select>
+  </div>
+
+  <div style="align-self:end;">
+    <button class="btn-secondary" onclick="loadSelectedQuestion()">Load Soal</button>
+  </div>
+</div>
+<p class="small">Gunakan LaTeX untuk equation. Gambar pakai link gambar/Drive direct link di kolom Media URL.</p>
+<div class="form-grid">
+<div><label>Jenis Tes</label><select id="qTest"><option value="NUMERASI">Numerasi</option><option value="LITERASI">Literasi</option></select></div>
+<div><label>Nomor Soal</label><input id="qNumber" type="number" min="1" value="1" oninput="updateQuestionId()"></div>
+<div><label>Question ID</label><input id="qId" placeholder="Auto" readonly style="background:#f7f9fc;font-weight:800;color:#1b5fae"></div>
+<div><label>Tipe Soal</label><select id="qType"><option value="MC">Pilihan Ganda</option><option value="ESSAY">Essay</option></select></div>
+<div class="form-full">
+<label>Pertanyaan / Stimulus</label>
+
+<div class="rich-toolbar" id="richToolbar">
+  <button type="button" title="Bold" onclick="richCommand('bold')"><b>B</b></button>
+  <button type="button" title="Italic" onclick="richCommand('italic')"><i>I</i></button>
+  <button type="button" title="Underline" onclick="richCommand('underline')"><u>U</u></button>
+  <button type="button" title="Bullet" onclick="richCommand('insertUnorderedList')">• List</button>
+  <button type="button" title="Numbering" onclick="richCommand('insertOrderedList')">1. List</button>
+  <button type="button" title="Hapus format" onclick="richCommand('removeFormat')">Clear</button>
+</div>
+
+<div id="qRichEditor"
+     class="rich-editor"
+     contenteditable="true"
+     data-placeholder="Ketik pertanyaan di sini. Blok teks lalu klik B, I, atau U."
+     oninput="syncEditorToHidden()" onpaste="handleRichPaste(event)"></div>
+
+<textarea id="qHtml" hidden></textarea>
+
+<div class="row" style="margin-top:8px">
+  <button type="button" class="btn-mini btn-secondary" onclick="insertLatex('\\( \\frac{a}{b} \\)')">+ Pecahan</button>
+  <button type="button" class="btn-mini btn-secondary" onclick="insertLatex('\\( x^2 + 2x + 1 \\)')">+ Pangkat</button>
+  <button type="button" class="btn-mini btn-secondary" onclick="insertLatex('\\[ x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} \\]')">+ Rumus besar</button>
+</div>
+</div>
+<div class="form-full"><label>Media URL / Gambar</label><input id="qMedia" style="width:100%" placeholder="https://...jpg/png atau link gambar direct"></div>
+<div><label>Option A</label><input id="optA" style="width:100%"></div>
+<div><label>Option B</label><input id="optB" style="width:100%"></div>
+<div><label>Option C</label><input id="optC" style="width:100%"></div>
+<div><label>Option D</label><input id="optD" style="width:100%"></div>
+<div><label>Option E</label><input id="optE" style="width:100%"></div>
+<div id="answerBox">
+  <label>Jawaban Benar</label>
+  <select id="qAnswer">
+    <option value="A">A</option>
+    <option value="B">B</option>
+    <option value="C">C</option>
+    <option value="D">D</option>
+    <option value="E">E</option>
+  </select>
+</div>
+<div id="pointBox">
+  <label>Point</label>
+  <input id="qPoint" type="number" min="0" value="1" style="width:100%">
+</div>
+<div><label>Status</label><select id="isActive"><option value="TRUE">Aktif</option><option value="FALSE">Nonaktif</option></select></div>
+</div>
+<div class="row" style="margin-top:18px"><button class="btn-secondary" onclick="previewQuestion()">Preview Soal</button><button id="saveQuestionBtn" class="btn-start" onclick="saveQuestion()">Simpan ke Bank Soal</button><button class="btn-reset" onclick="clearQuestionForm()">Kosongkan Form</button></div>
+<div class="help small">Catatan: untuk gambar Google Drive, pastikan file gambar sudah <b>Anyone with the link</b>. Kalau preview gambar tidak muncul, link masih bukan direct image.</div>
+</div>
+<div class="card"><h2>Preview</h2><div id="qPreview" class="preview-box">Preview soal akan muncul di sini.</div></div>
+</section>
+
+<section id="participants" class="section"><div class="card"><h2>Peserta Terdaftar</h2><p class="small">Data otomatis dari PARTICIPANTS.</p><table class="table"><thead><tr><th>Nama</th><th>Asal Sekolah</th><th>Status</th><th>Last Activity</th><th>Aksi</th></tr></thead><tbody id="participantsBody"><tr><td colspan="4">Memuat...</td></tr></tbody></table></div></section>
+
+<section id="essayScoring" class="section">
+<div class="card">
+  <h2>Penilaian Essay</h2>
+  <p class="small">Nilai jawaban essay Numerasi dan Literasi. Skor yang disimpan akan masuk ke ANSWERS dan ESSAY_SCORE.</p>
+
+  <div class="essay-filter-grid" style="margin-top:18px">
+    <div>
+      <label>Jenis Tes</label>
+      <select id="essayTestFilter" onchange="applyEssayFilters()">
+        <option value="NUMERASI">Numerasi</option>
+        <option value="LITERASI">Literasi</option>
+      </select>
+    </div>
+    <div>
+      <label>Peserta</label>
+      <select id="essayParticipantFilter" onchange="applyEssayFilters()">
+        <option value="">Semua peserta</option>
+      </select>
+    </div>
+    <div>
+      <label>Status Penilaian</label>
+      <select id="essayStatusFilter" onchange="applyEssayFilters()">
+        <option value="ALL">Semua</option>
+        <option value="UNSCORED">Belum dinilai</option>
+        <option value="SCORED">Sudah dinilai</option>
+      </select>
+    </div>
+    <div>
+      <button class="btn-secondary" onclick="loadEssayAssessments(true)">Refresh Jawaban</button>
+    </div>
+  </div>
+
+  <div id="essayMessage" class="alert hidden" style="margin-top:16px"></div>
+  <div id="essayProgress" class="essay-progress"></div>
+</div>
+
+<div class="card">
+  <div id="essayEmpty" class="essay-empty">Masukkan PIN guru, lalu klik Refresh Jawaban.</div>
+
+  <div id="essayWorkspace" class="essay-layout hidden">
+    <div class="essay-question-card">
+      <div class="essay-meta">
+        <span class="essay-chip" id="essayStudentChip">Peserta</span>
+        <span class="essay-chip" id="essayTestChip">Tes</span>
+        <span class="essay-chip" id="essayQuestionChip">Soal</span>
+        <span class="essay-chip" id="essayScoreStatusChip">Belum dinilai</span>
+      </div>
+
+      <h3 style="margin:0 0 8px">Pertanyaan</h3>
+      <div id="essayQuestionText" class="essay-question"></div>
+      <img id="essayQuestionImage" class="media-preview hidden" alt="Media soal">
+
+      <h3>Jawaban Siswa</h3>
+      <div id="essayStudentAnswer" class="essay-answer"></div>
+
+      <div class="essay-nav">
+        <button class="btn-secondary" id="essayPrevBtn" onclick="moveEssay(-1)">← Sebelumnya</button>
+        <button class="btn-secondary" id="essayNextBtn" onclick="moveEssay(1)">Berikutnya →</button>
+      </div>
+    </div>
+
+    <div class="essay-score-panel">
+      <h3 style="margin-top:0">Penilaian Guru</h3>
+      <p class="small">Skor maksimal: <b id="essayMaxScore">0</b></p>
+
+      <label>Skor</label>
+      <input id="essayScoreInput" type="number" min="0" step="0.5" placeholder="Masukkan skor">
+
+      <label style="margin-top:14px">Komentar Guru</label>
+      <textarea id="essayCommentInput" placeholder="Catatan atau umpan balik untuk jawaban siswa"></textarea>
+
+      <label style="margin-top:14px">Dinilai oleh</label>
+      <input id="essayScoredByInput" value="Guru" placeholder="Nama guru">
+
+      <button id="saveEssayScoreBtn" class="btn-start" style="width:100%;margin-top:16px" onclick="saveEssayScore()">Simpan Penilaian</button>
+      <p id="essaySavedInfo" class="small" style="margin-bottom:0"></p>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section id="report" class="section">
+  <div class="card no-print">
+    <div class="report-header-row">
+      <div>
+        <h2 style="margin:0 0 6px">Laporan Hasil Post-Test</h2>
+        <p class="small" style="margin:0">Pilih peserta, periksa hasil Numerasi dan Literasi, lalu cetak menjadi PDF 2 halaman A4.</p>
+      </div>
+      <div class="report-actions">
+        <button class="btn-secondary" onclick="loadReport(true)">Refresh Report</button>
+        <button class="btn-start" onclick="printSelectedReport()">Cetak PDF 2 Halaman A4</button>
+      </div>
+    </div>
+
+    <div class="report-filter-grid">
+      <div>
+        <label>Pilih Peserta</label>
+        <select id="reportParticipantSelect" onchange="renderSelectedReport()">
+          <option value="">-- pilih peserta --</option>
+        </select>
+      </div>
+      <div>
+        <label>Tampilan</label>
+        <select id="reportViewSelect" onchange="switchReportPreview(this.value)">
+          <option value="NUMERASI">Numerasi</option>
+          <option value="LITERASI">Literasi</option>
+          
+          <option value="ALL">Semua Halaman</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="reportMessage" class="alert hidden" style="margin-top:14px"></div>
+  </div>
+
+  <div id="reportEmpty" class="card report-empty">
+    Memuat data report...
+  </div>
+
+  <div id="reportPrintArea" class="report-print-area hidden">
+    <article id="reportPageNumerasi" class="report-page" data-report-page="NUMERASI"></article>
+    <article id="reportPageLiterasi" class="report-page" data-report-page="LITERASI"></article>
+  </div>
+</section>
+</main></div>
+<script>
+const API_URL = "PASTE_URL_WEB_APP_BACKEND_POST_TEST_DI_SINI";
+function api(params){
+  return new Promise((resolve, reject) => {
+    const callbackName = "jsonp_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+    params.callback = callbackName;
+    const script = document.createElement("script");
+    window[callbackName] = function(data){ resolve(data); script.remove(); delete window[callbackName]; };
+    script.src = API_URL + "?" + new URLSearchParams(params).toString();
+    script.onerror = function(){ reject(new Error("Gagal konek ke backend")); script.remove(); delete window[callbackName]; };
+    document.body.appendChild(script);
+  });
+}
+function showSection(id,el){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.menu-item').forEach(m=>m.classList.remove('active'));el.classList.add('active');if(id==='participants')loadParticipants();if(id==='essayScoring')loadEssayAssessments();if(id==='report')loadReport();}
+function showMessage(text,ok=true){const el=document.getElementById("message");el.textContent=text;el.classList.remove("hidden");el.style.background=ok?"#dcf8e7":"#ffe5e2";el.style.color=ok?"#207a43":"#c0392b";setTimeout(()=>el.classList.add("hidden"),3500)}
+let isLoadingAll = false;
+
+async function loadAll(){
+  if(isLoadingAll) return;
+  isLoadingAll = true;
+
+  try{
+    await loadSettings();
+    await loadParticipants();
+    // Report tidak dimuat otomatis.
+    // Report hanya dimuat saat menu Report dibuka atau tombol Refresh Report diklik.
+  }catch(err){
+    console.warn("loadAll gagal:", err);
+    showMessage("Gagal memuat data. Cek koneksi/API.", false);
+  }finally{
+    isLoadingAll = false;
+  }
+}
+async function loadSettings(){try{const res=await api({action:"settings"});if(!res.success){showMessage("Gagal membaca settings.",false);return}const s=res.data;const test=String(s.current_test||"NONE").toUpperCase();const status=String(s.test_status||"WAITING").toUpperCase();document.getElementById("statusPill").textContent=test+" — "+status;updateCards(test,status)}catch(e){showMessage("Gagal konek settings.",false)}}
+function updateCards(activeTest,status){
+  const order = ["NUMERASI","LITERASI"];
+  const activeIndex = order.indexOf(activeTest);
+
+  order.forEach((testName, index)=>{
+    const badge = document.getElementById("badge" + testName);
+    badge.className = "badge";
+
+    const alreadyPassed = activeIndex > index;
+    const activeFinished = activeTest === testName && status === "FINISHED";
+
+    if(alreadyPassed || activeFinished){
+      badge.classList.add("finished");
+      badge.textContent = "Selesai";
+    }else if(activeTest === testName && status === "RUNNING"){
+      badge.classList.add("running");
+      badge.textContent = "Sedang berlangsung";
+    }else if(activeTest === testName && status === "WAITING"){
+      badge.classList.add("waiting");
+      badge.textContent = "Prepare / Waiting";
+    }else{
+      badge.textContent = "Menunggu";
+    }
+  });
+}
+async function setTest(test,status){const pin=document.getElementById("teacherPin").value.trim();if(!pin){showMessage("Isi PIN guru dulu.",false);return}const res=await api({action:"teacherControl",pin:pin,test:test,status:status});if(!res.success){showMessage(res.message||"Gagal update.",false);return}showMessage(test+" berhasil diubah ke "+status);await loadAll()}
+async function resetToNone(){const res=await api({action:"updateSettings",current_test:"NONE",test_status:"WAITING"});if(!res.success){showMessage("Gagal reset.",false);return}showMessage("Sesi dikembalikan ke NONE / WAITING");await loadAll()}
+async function loadParticipants(){
+    try{
+
+        const res = await api({action:"participants"});
+        const body = document.getElementById("participantsBody");
+
+        if(!res.success){
+            body.innerHTML = "<tr><td colspan='5'>Gagal memuat peserta.</td></tr>";
+            return;
+        }
+
+        if(!res.data.length){
+            body.innerHTML = "<tr><td colspan='5'>Belum ada peserta.</td></tr>";
+            return;
+        }
+
+        body.innerHTML = res.data.map(p=>`
+            <tr>
+                <td>${esc(p.full_name||"-")}</td>
+                <td>${esc(p.school_origin||"-")}</td>
+                <td>${esc(p.status||"-")}</td>
+                <td>${esc(String(p.last_activity||"-"))}</td>
+
+                <td>
+                    <button
+                        class="danger"
+                        onclick="deleteParticipant('${p.participant_id}')">
+                        🗑 Remove
+                    </button>
+                </td>
+
+            </tr>
+        `).join("");
+
+    }catch(e){
+        console.error(e);
+    }
+}
+async function deleteParticipant(participantId){
+
+    if(!confirm("Yakin ingin menghapus peserta ini?")){
+        return;
+    }
+
+    const pin = document.getElementById("teacherPin").value.trim();
+
+    if(!pin){
+        alert("Masukkan PIN guru terlebih dahulu.");
+        return;
+    }
+
+    const res = await api({
+        action:"deleteParticipant",
+        participant_id:participantId,
+        pin:pin
+    });
+
+    alert(res.message);
+
+    if(res.success){
+        loadParticipants();
+    }
+}
+
+let reportData = [];
+let reportLoading = false;
+
+function showReportMessage(text, ok=true){
+  const el = document.getElementById("reportMessage");
+  if(!el) return;
+  el.textContent = text;
+  el.classList.remove("hidden");
+  el.style.background = ok ? "#dcf8e7" : "#ffe5e2";
+  el.style.color = ok ? "#207a43" : "#c0392b";
+  clearTimeout(showReportMessage.timer);
+  showReportMessage.timer = setTimeout(()=>el.classList.add("hidden"), 4200);
+}
+
+async function loadReport(force=false){
+  if(reportLoading) return;
+  const section = document.getElementById("report");
+  if(!force && section && !section.classList.contains("active")) return;
+
+  reportLoading = true;
+  const empty = document.getElementById("reportEmpty");
+  const printArea = document.getElementById("reportPrintArea");
+  if(empty){
+    empty.textContent = "Memuat data report...";
+    empty.classList.remove("hidden");
+  }
+  printArea?.classList.add("hidden");
+
+  try{
+    const res = await api({action:"report"});
+    if(!res.success){
+      reportData = [];
+      if(empty) empty.textContent = res.message || "Gagal memuat report.";
+      showReportMessage(res.message || "Gagal memuat report.", false);
+      return;
+    }
+
+    reportData = Array.isArray(res.data) ? res.data : [];
+    populateReportParticipants();
+
+    if(!reportData.length){
+      if(empty) empty.textContent = "Belum ada data report.";
+      return;
+    }
+
+    const select = document.getElementById("reportParticipantSelect");
+    if(select && !select.value){
+      select.value = String(reportData[0].participant_id || "");
+    }
+    renderSelectedReport();
+  }catch(err){
+    console.error("Gagal memuat report:", err);
+    reportData = [];
+    if(empty) empty.textContent = "Gagal terhubung ke backend report.";
+    showReportMessage("Gagal terhubung ke backend report.", false);
+  }finally{
+    reportLoading = false;
+  }
+}
+
+function populateReportParticipants(){
+  const select = document.getElementById("reportParticipantSelect");
+  if(!select) return;
+  const previous = select.value;
+
+  select.innerHTML = '<option value="">-- pilih peserta --</option>';
+  reportData
+    .slice()
+    .sort((a,b)=>String(a.full_name||"").localeCompare(String(b.full_name||""),"id"))
+    .forEach(item=>{
+      const opt = document.createElement("option");
+      opt.value = String(item.participant_id || "");
+      opt.textContent = `${item.full_name || "Tanpa nama"}${item.school_origin ? " — " + item.school_origin : ""}`;
+      select.appendChild(opt);
+    });
+
+  if(reportData.some(x=>String(x.participant_id)===String(previous))){
+    select.value = previous;
+  }
+}
+
+function renderSelectedReport(){
+  const select = document.getElementById("reportParticipantSelect");
+  const id = select?.value || "";
+  const empty = document.getElementById("reportEmpty");
+  const printArea = document.getElementById("reportPrintArea");
+
+  if(!id){
+    if(empty){
+      empty.textContent = "Pilih peserta untuk melihat laporan.";
+      empty.classList.remove("hidden");
+    }
+    printArea?.classList.add("hidden");
+    return;
+  }
+
+  const item = reportData.find(x=>String(x.participant_id)===String(id));
+  if(!item){
+    if(empty){
+      empty.textContent = "Data peserta tidak ditemukan.";
+      empty.classList.remove("hidden");
+    }
+    printArea?.classList.add("hidden");
+    return;
+  }
+
+  document.getElementById("reportPageNumerasi").innerHTML = buildAcademicReportPage(item,"NUMERASI");
+  document.getElementById("reportPageLiterasi").innerHTML = buildAcademicReportPage(item,"LITERASI");
+
+  empty?.classList.add("hidden");
+  printArea?.classList.remove("hidden");
+  switchReportPreview(document.getElementById("reportViewSelect")?.value || "NUMERASI");
+}
+
+function switchReportPreview(view){
+  document.querySelectorAll("[data-report-page]").forEach(page=>{
+    page.classList.toggle("preview-hidden", view !== "ALL" && page.dataset.reportPage !== view);
+  });
+}
+
+function numberOrZero(value){
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function formatReportNumber(value){
+  const n = numberOrZero(value);
+  return n.toLocaleString("id-ID",{maximumFractionDigits:2});
+}
+
+function levelDots(level){
+  const n = Math.max(1,Math.min(5,Number(level)||1));
+  let html = '<span class="level-dots" aria-label="Level '+n+' dari 5">';
+  for(let i=1;i<=5;i++){
+    html += `<span class="${i<=n?'on':''}">●</span>`;
+  }
+  return html + "</span>";
+}
+
+function buildStudentInfo(item){
+  return `
+    <div class="report-student-info">
+      <div class="report-info-item"><b>Nama Siswa</b><span>:</span><span>${esc(item.full_name||"-")}</span></div>
+      <div class="report-info-item"><b>Asal Sekolah</b><span>:</span><span>${esc(item.school_origin||"-")}</span></div>
+      <div class="report-info-item"><b>ID Peserta</b><span>:</span><span>${esc(item.participant_id||"-")}</span></div>
+      <div class="report-info-item"><b>Status Tes</b><span>:</span><span>${esc(item.status||"-")}</span></div>
+    </div>`;
+}
+
+function buildDocHeader(title){
+  return `
+    <div class="report-doc-head">
+      <div class="report-logo-box">MDC</div>
+      <div class="report-doc-title">
+        <h1>${esc(title)}</h1>
+        <p>SMP Kristen Masa Depan Cerah — Laporan Hasil Post-Test Siswa Baru</p>
+      </div>
+    </div>`;
+}
+
+function buildAcademicReportPage(item,testType){
+  const prefix = testType.toLowerCase();
+  const title = testType === "NUMERASI"
+    ? "LAPORAN DIAGNOSTIK NUMERASI"
+    : "LAPORAN DIAGNOSTIK LITERASI";
+
+  const value = numberOrZero(item[prefix+"_value"]);
+  const score = numberOrZero(item[prefix+"_score"]);
+  const maxScore = numberOrZero(item[prefix+"_max_score"]);
+  const answered = numberOrZero(item[prefix+"_answered_count"]);
+  const totalQuestions = numberOrZero(item[prefix+"_question_count"]);
+  const category = item[prefix+"_category"] || "-";
+  const analysis = Array.isArray(item[prefix+"_analysis"]) ? item[prefix+"_analysis"] : [];
+
+  const rows = analysis.map((m,index)=>{
+    const subs = Array.isArray(m.sub_materials) ? m.sub_materials : [];
+    const subHtml = subs.length
+      ? `<ul class="report-submaterials">${subs.map(s=>`<li>${esc(s.sub_materi||"-")} — ${levelDots(s.level)} (${esc(s.category||"-")})</li>`).join("")}</ul>`
+      : "";
+
+    return `
+      <tr>
+        <td style="width:36px;text-align:center">${index+1}</td>
+        <td>
+          <div class="report-material-name">${esc(m.materi||"-")}</div>
+          ${subHtml}
+        </td>
+        <td style="width:135px">${levelDots(m.level)}</td>
+        <td style="width:105px">${formatReportNumber(m.score_obtained)} / ${formatReportNumber(m.max_score)}</td>
+        <td style="width:110px">${esc(m.category||"-")}</td>
+      </tr>`;
+  }).join("");
+
+  const note = value >= 90
+    ? "Siswa menunjukkan kesiapan yang sangat baik pada materi yang diujikan. Pembelajaran dapat dilanjutkan dengan kegiatan pengayaan dan tantangan yang lebih kompleks."
+    : value >= 80
+      ? "Siswa cukup siap mengikuti pembelajaran. Guru disarankan tetap memberikan penguatan pada materi yang levelnya masih rendah."
+      : value >= 75
+        ? "Siswa memerlukan penguatan pada beberapa kompetensi dasar sebelum memasuki materi lanjutan."
+        : "Siswa memerlukan pendampingan terstruktur. Prioritaskan materi dengan level 1–2 sebagai dasar program matrikulasi lanjutan.";
+
+  return `
+    ${buildDocHeader(title)}
+    ${buildStudentInfo(item)}
+    <div class="report-summary">
+      <div class="report-score-circle">
+        <div class="value">${formatReportNumber(value)}</div>
+        <div class="label">Nilai 0–100</div>
+      </div>
+      <div class="report-category">
+        <h3>${esc(category)}</h3>
+        <p>Skor diperoleh <b>${formatReportNumber(score)}</b> dari skor maksimal <b>${formatReportNumber(maxScore)}</b>.</p>
+        <p>Soal terjawab <b>${answered}</b> dari <b>${totalQuestions}</b> soal aktif.</p>
+        <p style="margin-top:7px">Indikator materi: ${levelDots(item[prefix+"_level"])} — level ${Number(item[prefix+"_level"])||1} dari 5.</p>
+      </div>
+    </div>
+
+    <h2 class="report-section-title">Analisis Materi</h2>
+    <table class="report-material-table">
+      <thead>
+        <tr><th>No.</th><th>Materi dan Submateri</th><th>Level 1–5</th><th>Skor</th><th>Kategori</th></tr>
+      </thead>
+      <tbody>${rows || '<tr><td colspan="5">Belum ada analisis materi.</td></tr>'}</tbody>
+    </table>
+
+    <div class="report-note"><b>Rekomendasi tindak lanjut:</b> ${esc(note)}</div>
+    <div class="report-footer"><span>MDC Post-Test System</span><span>${testType === "NUMERASI" ? "Halaman 1 dari 2" : "Halaman 2 dari 2"}</span></div>`;
+}
+
+function printSelectedReport(){
+  const id = document.getElementById("reportParticipantSelect")?.value || "";
+  if(!id){
+    showReportMessage("Pilih peserta terlebih dahulu.", false);
+    return;
+  }
+
+  const pages = [
+    document.getElementById("reportPageNumerasi"),
+    document.getElementById("reportPageLiterasi")
+  ];
+
+  if(pages.some(page => !page || !page.innerHTML.trim())){
+    showReportMessage("Data report belum selesai dimuat. Klik Refresh Report lalu coba lagi.", false);
+    return;
+  }
+
+  const printWindow = window.open("", "_blank", "width=1100,height=850");
+  if(!printWindow){
+    showReportMessage("Pop-up diblokir browser. Izinkan pop-up lalu klik Cetak PDF lagi.", false);
+    return;
+  }
+
+  const pageHtml = pages.map(page => {
+    const clone = page.cloneNode(true);
+    clone.classList.remove("preview-hidden", "hidden");
+    return clone.outerHTML;
+  }).join("\n");
+
+  printWindow.document.open();
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Laporan Hasil Post-Test - Numerasi dan Literasi</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#fff;color:#10243e;font-family:Arial,Helvetica,sans-serif}
+  .print-document{display:block;margin:0;padding:0;width:100%}
+
+  /* SATU ARTICLE = SATU KERTAS A4 */
+  .report-page{
+    position:relative;
+    display:block;
+    width:210mm;
+    height:297mm;
+    min-height:297mm;
+    margin:0 auto;
+    padding:9mm 10mm 12mm;
+    overflow:hidden;
+    background:#fff;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+    page-break-after:always;
+    break-after:page;
+  }
+  .report-page:last-child{page-break-after:auto;break-after:auto}
+
+  .report-doc-head{
+    display:grid;
+    grid-template-columns:60px 1fr;
+    gap:12px;
+    align-items:center;
+    border-bottom:2px solid #1b5fae;
+    padding-bottom:9px;
+    margin-bottom:10px;
+    break-inside:avoid;
+  }
+  .report-logo-box{
+    width:54px;height:54px;border-radius:12px;background:#eaf3ff;color:#1b5fae;
+    font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;
+    border:1px solid #cfe2fb;
+  }
+  .report-doc-title{text-align:center}
+  .report-doc-title h1{font-size:18px;margin:0 0 3px;color:#102a43}
+  .report-doc-title p{margin:0;color:#60758a;font-size:9px}
+
+  .report-student-info{
+    display:grid;grid-template-columns:1fr 1fr;gap:4px 15px;
+    background:#f7f9fc;border-radius:9px;padding:8px 10px;margin-bottom:10px;
+    break-inside:avoid;
+  }
+  .report-info-item{display:grid;grid-template-columns:78px 7px 1fr;font-size:9px;line-height:1.35}
+  .report-info-item b{color:#24435f}
+
+  .report-summary{
+    display:grid;grid-template-columns:92px 1fr;gap:12px;align-items:center;
+    border:1px solid #dbe5f0;border-radius:12px;padding:10px;margin-bottom:9px;
+    break-inside:avoid;
+  }
+  .report-score-circle{
+    width:78px;height:78px;border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;background:#f7fbff;border:5px solid #d6e9ff;margin:auto;
+  }
+  .report-score-circle .value{font-size:22px;font-weight:900;color:#1b5fae;line-height:1}
+  .report-score-circle .label{font-size:8px;color:#6f8092;margin-top:4px}
+  .report-category h3{font-size:16px;margin:0 0 5px;color:#163a5f}
+  .report-category p{margin:1px 0;color:#425970;line-height:1.35;font-size:9px}
+
+  .report-section-title{
+    font-size:12px;margin:8px 0 5px;padding-bottom:4px;
+    border-bottom:1.5px solid #dbe5f0;color:#163a5f;break-after:avoid;
+  }
+  .report-material-table{width:100%;border-collapse:collapse;font-size:8px;table-layout:fixed}
+  .report-material-table th,.report-material-table td{
+    border:1px solid #dbe5f0;padding:4px;vertical-align:top;line-height:1.22;
+  }
+  .report-material-table th{background:#eef5fc;color:#24435f;text-align:left}
+  .report-material-table tr{break-inside:avoid;page-break-inside:avoid}
+  .report-material-name{font-weight:800;color:#20384f}
+  .report-submaterials{margin:3px 0 0;padding-left:12px;color:#53687d}
+  .report-submaterials li{margin:2px 0}
+  .level-dots{white-space:nowrap;font-size:9px;letter-spacing:1px;color:#cbd7e4}
+  .level-dots .on{color:#2f80ed}
+
+  .report-note{
+    margin-top:7px;padding:7px 9px;border-left:3px solid #2f80ed;
+    background:#f5f9ff;border-radius:7px;color:#425970;line-height:1.35;font-size:8px;
+    break-inside:avoid;
+  }
+  .report-footer{
+    position:absolute;left:10mm;right:10mm;bottom:5mm;border-top:1px solid #dbe5f0;
+    padding-top:4px;display:flex;justify-content:space-between;font-size:7px;color:#8190a0;
+  }
+
+  @page{size:A4 portrait;margin:0}
+  @media print{
+    html,body{width:210mm;margin:0!important;padding:0!important}
+    .report-page{
+      width:210mm!important;height:297mm!important;min-height:297mm!important;
+      margin:0!important;padding:9mm 10mm 12mm!important;overflow:hidden!important;
+      page-break-after:always!important;break-after:page!important;
+      print-color-adjust:exact;-webkit-print-color-adjust:exact;
+    }
+    .report-page:last-child{page-break-after:auto!important;break-after:auto!important}
+  }
+</style>
+</head>
+<body>
+  <main class="print-document">${pageHtml}</main>
+  <script>
+    window.addEventListener('load', function(){
+      setTimeout(function(){ window.focus(); window.print(); }, 450);
+    });
+    window.addEventListener('afterprint', function(){ window.close(); });
+  <\/script>
+</body>
+</html>`);
+  printWindow.document.close();
+}
+let essayAllItems = [];
+let essayFilteredItems = [];
+let essayCurrentIndex = 0;
+let essayLoading = false;
+
+function showEssayMessage(text, ok=true){
+  const el = document.getElementById("essayMessage");
+  if(!el) return;
+  el.textContent = text;
+  el.classList.remove("hidden");
+  el.style.background = ok ? "#dcf8e7" : "#ffe5e2";
+  el.style.color = ok ? "#207a43" : "#c0392b";
+  clearTimeout(showEssayMessage.timer);
+  showEssayMessage.timer = setTimeout(()=>el.classList.add("hidden"), 4000);
+}
+
+async function loadEssayAssessments(force=false){
+  if(essayLoading) return;
+
+  const section = document.getElementById("essayScoring");
+  if(!force && section && !section.classList.contains("active")) return;
+
+  const pin = document.getElementById("teacherPin").value.trim();
+  const testType = document.getElementById("essayTestFilter")?.value || "NUMERASI";
+
+  if(!pin){
+    showEssayMessage("Masukkan PIN guru di Dashboard terlebih dahulu.", false);
+    showEssayEmpty("Masukkan PIN guru di Dashboard, lalu buka kembali Penilaian Essay.");
+    return;
+  }
+
+  essayLoading = true;
+  showEssayEmpty("Memuat jawaban essay...");
+
+  try{
+    const res = await api({
+      action: "essayList",
+      pin: pin,
+      test_type: testType
+    });
+
+    if(!res.success){
+      essayAllItems = [];
+      essayFilteredItems = [];
+      showEssayEmpty(res.message || "Gagal memuat jawaban essay.");
+      showEssayMessage(res.message || "Gagal memuat jawaban essay.", false);
+      return;
+    }
+
+    essayAllItems = Array.isArray(res.data) ? res.data : [];
+    populateEssayParticipants();
+    applyEssayFilters(true);
+
+    if(!essayAllItems.length){
+      showEssayEmpty("Belum ada jawaban essay untuk tes ini.");
+    }
+  }catch(err){
+    console.error("Gagal memuat essay:", err);
+    essayAllItems = [];
+    essayFilteredItems = [];
+    showEssayEmpty("Gagal terhubung ke backend essay.");
+    showEssayMessage("Gagal terhubung ke backend essay.", false);
+  }finally{
+    essayLoading = false;
+  }
+}
+
+function populateEssayParticipants(){
+  const select = document.getElementById("essayParticipantFilter");
+  if(!select) return;
+
+  const previous = select.value;
+  const people = new Map();
+
+  essayAllItems.forEach(item=>{
+    const id = String(item.participant_id || "").trim();
+    if(id && !people.has(id)){
+      people.set(id, item.full_name || id);
+    }
+  });
+
+  select.innerHTML = '<option value="">Semua peserta</option>';
+  [...people.entries()]
+    .sort((a,b)=>String(a[1]).localeCompare(String(b[1]), "id"))
+    .forEach(([id,name])=>{
+      const opt = document.createElement("option");
+      opt.value = id;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+
+  if(people.has(previous)) select.value = previous;
+}
+
+function applyEssayFilters(preserveIndex=false){
+  const participantId = document.getElementById("essayParticipantFilter")?.value || "";
+  const status = document.getElementById("essayStatusFilter")?.value || "ALL";
+  const currentKey = preserveIndex && essayFilteredItems[essayCurrentIndex]
+    ? getEssayItemKey(essayFilteredItems[essayCurrentIndex])
+    : "";
+
+  essayFilteredItems = essayAllItems.filter(item=>{
+    if(participantId && item.participant_id !== participantId) return false;
+    if(status === "SCORED" && !item.is_scored) return false;
+    if(status === "UNSCORED" && item.is_scored) return false;
+    return true;
+  });
+
+  essayCurrentIndex = 0;
+  if(currentKey){
+    const found = essayFilteredItems.findIndex(item=>getEssayItemKey(item) === currentKey);
+    if(found >= 0) essayCurrentIndex = found;
+  }
+
+  renderEssayItem();
+}
+
+function getEssayItemKey(item){
+  return [item.participant_id, item.test_type, item.question_id].join("||");
+}
+
+function showEssayEmpty(message){
+  const empty = document.getElementById("essayEmpty");
+  const workspace = document.getElementById("essayWorkspace");
+  const progress = document.getElementById("essayProgress");
+  if(empty){
+    empty.textContent = message;
+    empty.classList.remove("hidden");
+  }
+  if(workspace) workspace.classList.add("hidden");
+  if(progress) progress.textContent = "";
+}
+
+function renderEssayItem(){
+  const empty = document.getElementById("essayEmpty");
+  const workspace = document.getElementById("essayWorkspace");
+  const progress = document.getElementById("essayProgress");
+
+  if(!essayFilteredItems.length){
+    showEssayEmpty(essayAllItems.length
+      ? "Tidak ada jawaban yang sesuai dengan filter."
+      : "Belum ada jawaban essay untuk tes ini.");
+    return;
+  }
+
+  if(essayCurrentIndex < 0) essayCurrentIndex = 0;
+  if(essayCurrentIndex >= essayFilteredItems.length){
+    essayCurrentIndex = essayFilteredItems.length - 1;
+  }
+
+  const item = essayFilteredItems[essayCurrentIndex];
+  empty?.classList.add("hidden");
+  workspace?.classList.remove("hidden");
+
+  document.getElementById("essayStudentChip").textContent =
+    `${item.full_name || item.participant_id}${item.school_origin ? " — " + item.school_origin : ""}`;
+  document.getElementById("essayTestChip").textContent = item.test_type || "-";
+  document.getElementById("essayQuestionChip").textContent =
+    `${item.question_id || "-"} · No. ${item.question_number || "-"}`;
+
+  const statusChip = document.getElementById("essayScoreStatusChip");
+  statusChip.textContent = item.is_scored ? "Sudah dinilai" : "Belum dinilai";
+  statusChip.className = "essay-chip" + (item.is_scored ? " done" : "");
+
+  document.getElementById("essayQuestionText").innerHTML =
+    item.question_html || "<i>Pertanyaan tidak tersedia.</i>";
+  document.getElementById("essayStudentAnswer").textContent =
+    item.answer || "(Siswa tidak mengisi jawaban.)";
+
+  const image = document.getElementById("essayQuestionImage");
+  if(item.media_url){
+    image.src = item.media_url;
+    image.classList.remove("hidden");
+    image.onerror = ()=>image.classList.add("hidden");
+  }else{
+    image.removeAttribute("src");
+    image.classList.add("hidden");
+  }
+
+  const maxScore = Number(item.max_score || 1);
+  const scoreInput = document.getElementById("essayScoreInput");
+  document.getElementById("essayMaxScore").textContent = maxScore;
+  scoreInput.max = maxScore;
+  scoreInput.value = item.teacher_score === "" || item.teacher_score == null
+    ? ""
+    : item.teacher_score;
+  document.getElementById("essayCommentInput").value = item.comment || "";
+  document.getElementById("essayScoredByInput").value = item.scored_by || "Guru";
+
+  const savedInfo = document.getElementById("essaySavedInfo");
+  savedInfo.textContent = item.scored_at
+    ? `Terakhir dinilai: ${formatEssayDate(item.scored_at)}`
+    : "Belum pernah dinilai.";
+
+  document.getElementById("essayPrevBtn").disabled = essayCurrentIndex === 0;
+  document.getElementById("essayNextBtn").disabled = essayCurrentIndex === essayFilteredItems.length - 1;
+  progress.textContent = `Jawaban ${essayCurrentIndex + 1} dari ${essayFilteredItems.length}`;
+
+  if(window.MathJax && MathJax.typesetPromise){
+    const target = document.getElementById("essayQuestionText");
+    MathJax.typesetClear?.([target]);
+    MathJax.typesetPromise([target]).catch(console.error);
+  }
+}
+
+function moveEssay(direction){
+  const next = essayCurrentIndex + direction;
+  if(next < 0 || next >= essayFilteredItems.length) return;
+  essayCurrentIndex = next;
+  renderEssayItem();
+}
+
+async function saveEssayScore(){
+  const item = essayFilteredItems[essayCurrentIndex];
+  if(!item) return;
+
+  const pin = document.getElementById("teacherPin").value.trim();
+  const scoreText = document.getElementById("essayScoreInput").value.trim();
+  const comment = document.getElementById("essayCommentInput").value.trim();
+  const scoredBy = document.getElementById("essayScoredByInput").value.trim() || "Guru";
+  const maxScore = Number(item.max_score || 1);
+  const score = Number(scoreText);
+
+  if(!pin){
+    showEssayMessage("PIN guru belum diisi.", false);
+    return;
+  }
+  if(scoreText === "" || !Number.isFinite(score)){
+    showEssayMessage("Masukkan skor berupa angka.", false);
+    return;
+  }
+  if(score < 0 || score > maxScore){
+    showEssayMessage(`Skor harus antara 0 dan ${maxScore}.`, false);
+    return;
+  }
+
+  const btn = document.getElementById("saveEssayScoreBtn");
+  btn.disabled = true;
+  btn.textContent = "Menyimpan...";
+
+  try{
+    const res = await api({
+      action: "scoreEssay",
+      pin: pin,
+      participant_id: item.participant_id,
+      test_type: item.test_type,
+      question_id: item.question_id,
+      score: score,
+      comment: comment,
+      scored_by: scoredBy
+    });
+
+    if(!res.success){
+      showEssayMessage(res.message || "Gagal menyimpan penilaian.", false);
+      return;
+    }
+
+    item.teacher_score = score;
+    item.final_score = score;
+    item.comment = comment;
+    item.scored_by = scoredBy;
+    item.scored_at = new Date().toISOString();
+    item.is_scored = true;
+
+    const allIndex = essayAllItems.findIndex(x=>getEssayItemKey(x) === getEssayItemKey(item));
+    if(allIndex >= 0) essayAllItems[allIndex] = item;
+
+    showEssayMessage(res.message || "Penilaian berhasil disimpan.", true);
+
+    const statusFilter = document.getElementById("essayStatusFilter")?.value || "ALL";
+    if(statusFilter === "UNSCORED"){
+      applyEssayFilters();
+    }else{
+      renderEssayItem();
+    }
+
+    loadReport();
+  }catch(err){
+    console.error("Gagal simpan nilai essay:", err);
+    showEssayMessage("Gagal terhubung ke backend.", false);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = "Simpan Penilaian";
+  }
+}
+
+function formatEssayDate(value){
+  const date = new Date(value);
+  if(Number.isNaN(date.getTime())) return String(value || "");
+  return date.toLocaleString("id-ID");
+}
+
+function getQuestionPrefix(){
+  const test=document.getElementById("qTest").value;
+  if(test==="NUMERASI") return "N";
+  if(test==="LITERASI") return "L";
+  return "Q";
+}
+function updateQuestionId(){
+  const numberInput = document.getElementById("qNumber");
+  const idInput = document.getElementById("qId");
+
+  let number = parseInt(numberInput.value, 10);
+
+  if(!Number.isFinite(number) || number < 1){
+    number = 1;
+  }
+
+  numberInput.value = number;
+  idInput.value = getQuestionPrefix() + String(number).padStart(3, "0");
+}
+function updateQuestionMode(){
+  const test = document.getElementById("qTest").value;
+  const type = document.getElementById("qType").value;
+
+  const isKarakter = false;
+  const isEssay = type === "ESSAY";
+
+  // Essay tidak butuh option dan jawaban benar.
+  // Karakter tetap pakai option, tapi tidak pakai jawaban benar dan point.
+  ["optA","optB","optC","optD","optE"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el && el.parentElement){
+      el.parentElement.style.display = isEssay ? "none" : "block";
+    }
+  });
+
+  const answerBox = document.getElementById("answerBox");
+  const pointBox = document.getElementById("pointBox");
+
+  if(answerBox) answerBox.style.display = (isKarakter || isEssay) ? "none" : "block";
+  if(pointBox) pointBox.style.display = isKarakter ? "none" : "block";
+
+  if(isEssay){
+    document.getElementById("qAnswer").value = "A";
+  }
+}
+function cleanQuestionHtml(html){
+const t=document.createElement('template');t.innerHTML=String(html||'');
+const allowed=new Set(['B','STRONG','I','EM','U','BR','P','DIV','UL','OL','LI','SUP','SUB']);
+[...t.content.querySelectorAll('*')].forEach(el=>{if(!allowed.has(el.tagName)){el.replaceWith(...el.childNodes);return;}[...el.attributes].forEach(a=>el.removeAttribute(a.name));});
+return t.innerHTML.replace(/&nbsp;/g,' ').replace(/<div><br><\/div>/gi,'<br>').replace(/<div>/gi,'<p>').replace(/<\/div>/gi,'</p>').trim();}
+function syncEditorToHidden(){
+  const editor=document.getElementById('qRichEditor');
+  const hidden=document.getElementById('qHtml');
+  if(!editor||!hidden)return;
+
+  // Jangan tulis ulang innerHTML editor saat sedang mengetik.
+  // Menulis ulang editor membuat posisi kursor kembali ke awal.
+  hidden.value=cleanQuestionHtml(editor.innerHTML);
+}
+
+function escapePasteText(text){
+  return String(text||'')
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('\r\n','\n')
+    .replaceAll('\r','\n')
+    .replaceAll('\n','<br>');
+}
+
+function handleRichPaste(e){
+  e.preventDefault();
+
+  const text=e.clipboardData.getData('text/plain');
+  const html=escapePasteText(text);
+
+  // Insert HTML bersih agar Enter/baris baru tetap sesuai posisi paste.
+  document.execCommand('insertHTML',false,html);
+  syncEditorToHidden();
+}
+
+function setRichEditorHtml(html){
+  const editor = document.getElementById("qRichEditor");
+  const hidden = document.getElementById("qHtml");
+  if(!editor || !hidden) return;
+
+  const value = String(html || "");
+  const looksLikeHtml = /<\/?[a-z][\s\S]*>/i.test(value);
+
+  editor.innerHTML = looksLikeHtml
+    ? value
+    : value.replace(/\r\n/g, "\n").replace(/\n/g, "<br>");
+
+  syncEditorToHidden();
+}
+
+function richCommand(command){
+  const editor = document.getElementById("qRichEditor");
+  if(!editor) return;
+
+  editor.focus();
+  document.execCommand(command, false, null);
+  syncEditorToHidden();
+  previewQuestion();
+}
+
+function insertLatex(txt){
+  const editor = document.getElementById("qRichEditor");
+  if(!editor) return;
+
+  editor.focus();
+
+  const selection = window.getSelection();
+  if(selection && selection.rangeCount){
+    const range = selection.getRangeAt(0);
+
+    if(editor.contains(range.commonAncestorContainer)){
+      range.deleteContents();
+      const textNode = document.createTextNode(txt);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }else{
+      editor.appendChild(document.createTextNode(txt));
+    }
+  }else{
+    editor.appendChild(document.createTextNode(txt));
+  }
+
+  syncEditorToHidden();
+  previewQuestion();
+}
+
+function previewQuestion(){
+  syncEditorToHidden();
+
+  const qHtml = document.getElementById("qHtml").value ||
+    "Pertanyaan belum diisi.";
+  const media = document.getElementById("qMedia").value.trim();
+  const type = document.getElementById("qType").value;
+
+  let opts = "";
+
+  if(type === "MC"){
+    ["A","B","C","D","E"].forEach(l=>{
+      const v = document.getElementById("opt"+l).value;
+      if(v){
+        opts += `<div class="option-preview"><b>${l}.</b> ${esc(v)}</div>`;
+      }
+    });
+  }
+
+  const img = media
+    ? `<img class="media-preview" src="${esc(media)}" onerror="this.style.display='none'">`
+    : "";
+
+  document.getElementById("qPreview").innerHTML =
+    `<div class="question-preview">${qHtml}</div>${img}${opts}`;
+
+  if(window.MathJax && MathJax.typesetPromise){
+    MathJax.typesetClear?.([document.getElementById("qPreview")]);
+    MathJax.typesetPromise([document.getElementById("qPreview")])
+      .catch(console.error);
+  }
+}
+
+async function saveQuestion(){
+  syncEditorToHidden();
+  const pin = document.getElementById("teacherPin").value.trim();
+  if(!pin){
+    showMessage("Isi PIN guru dulu.", false);
+    return;
+  }
+
+  const btn = document.getElementById("saveQuestionBtn");
+  const isEditMode = btn && btn.dataset.mode === "edit";
+
+  const testType = document.getElementById("qTest")?.value || "";
+  const qType = document.getElementById("qType")?.value || "MC";
+  const isKarakter = false;
+  const isEssay = qType === "ESSAY";
+
+  const correctEl =
+    document.getElementById("correctAnswer") ||
+    document.getElementById("qCorrect") ||
+    document.getElementById("qAnswer") ||
+    document.getElementById("correct_answer");
+
+  const payload = {
+    action: isEditMode ? "updateQuestion" : "saveQuestion",
+    pin: pin,
+    test_type: testType,
+    question_id: document.getElementById("qId")?.value || "",
+    question_number: document.getElementById("qNumber")?.value || "",
+    question_type: qType,
+    question_html: document.getElementById("qHtml")?.value || "",
+    media_url: document.getElementById("qMedia")?.value || "",
+    option_a: isEssay ? "" : (document.getElementById("optA")?.value || ""),
+    option_b: isEssay ? "" : (document.getElementById("optB")?.value || ""),
+    option_c: isEssay ? "" : (document.getElementById("optC")?.value || ""),
+    option_d: isEssay ? "" : (document.getElementById("optD")?.value || ""),
+    option_e: isEssay ? "" : (document.getElementById("optE")?.value || ""),
+    correct_answer: (isKarakter || isEssay) ? "" : (correctEl ? correctEl.value : ""),
+    point: isKarakter ? "" : (document.getElementById("qPoint")?.value || "1"),
+    is_active: document.getElementById("isActive")?.value || "TRUE"
+  };
+
+  const res = await api(payload);
+
+  if(res.success){
+    showMessage(res.message || (isEditMode ? "Soal berhasil diupdate." : "Soal berhasil disimpan."), true);
+
+    if(isEditMode){
+      await loadQuestionList();
+      previewQuestion();
+    }else{
+      clearQuestionForm(false);
+      await loadQuestionList();
+    }
+
+    loadAll();
+  }else{
+    showMessage(res.message || (isEditMode ? "Gagal update soal." : "Gagal menyimpan soal."), false);
+  }
+}
+function clearQuestionForm(resetPreview=true){
+  ["qHtml","qMedia","optA","optB","optC","optD","optE"].forEach(id=>document.getElementById(id).value="");
+  const richEditor = document.getElementById("qRichEditor");
+  if(richEditor) richEditor.innerHTML = "";
+  document.getElementById("qNumber").value = Number(document.getElementById("qNumber").value || 0) + 1;
+  document.getElementById("qPoint").value = "1";
+  document.getElementById("qAnswer").value = "A";
+
+  const btn = document.getElementById("saveQuestionBtn");
+  if(btn){
+    btn.textContent = "Simpan ke Bank Soal";
+    btn.dataset.mode = "add";
+  }
+
+  const savedSelect = document.getElementById("savedQuestionSelect");
+  if(savedSelect) savedSelect.value = "";
+
+  updateQuestionId();
+  updateQuestionMode();
+  if(resetPreview) document.getElementById("qPreview").innerHTML = "Preview soal akan muncul di sini.";
+}
+function esc(str){
+  return String(str || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;")
+    .replaceAll("\n","<br>");
+}
+document.getElementById("qTest").addEventListener("change", async ()=>{
+  const savedSelect = document.getElementById("savedQuestionSelect");
+  if(savedSelect) savedSelect.value = "";
+
+  const btn = document.getElementById("saveQuestionBtn");
+  if(btn){
+    btn.textContent = "Simpan ke Bank Soal";
+    btn.dataset.mode = "add";
+  }
+
+  updateQuestionId();
+  updateQuestionMode();
+  await loadQuestionList();
+});
+
+document.getElementById("qType").addEventListener("change", updateQuestionMode);
+document.getElementById("qNumber").addEventListener("input", updateQuestionId);
+document.getElementById("qNumber").addEventListener("change", updateQuestionId);
+
+updateQuestionId();
+updateQuestionMode();
+setRichEditorHtml(document.getElementById("qHtml")?.value || "");
+loadQuestionList();
+loadAll();
+// Hanya status dashboard yang diperbarui otomatis.
+// Data report tidak ikut refresh agar pilihan peserta dan tampilan tidak berkedip/reset.
+setInterval(loadSettings,10000);
+</script>
+</body>
+</html>

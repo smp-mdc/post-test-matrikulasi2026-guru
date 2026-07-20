@@ -836,13 +836,13 @@ function buildAcademicReportPage(item,testType){
       </tr>`;
   }).join("");
 
-  const note = value >= 90
-    ? "Siswa menunjukkan kesiapan yang sangat baik pada materi yang diujikan. Pembelajaran dapat dilanjutkan dengan kegiatan pengayaan dan tantangan yang lebih kompleks."
-    : value >= 80
-      ? "Siswa cukup siap mengikuti pembelajaran. Guru disarankan tetap memberikan penguatan pada materi yang levelnya masih rendah."
-      : value >= 75
-        ? "Siswa memerlukan penguatan pada beberapa kompetensi dasar sebelum memasuki materi lanjutan."
-        : "Siswa memerlukan pendampingan terstruktur. Prioritaskan materi dengan level 1–2 sebagai dasar program matrikulasi lanjutan.";
+  const note = value >= 91
+  ? "Siswa telah menunjukkan kesiapan belajar yang sangat baik. Pertahankan kebiasaan belajar yang konsisten dan terus kembangkan kemampuan melalui latihan yang lebih menantang serta penerapan konsep pada berbagai situasi."
+  : value >= 81
+    ? "Siswa telah memiliki bekal yang baik untuk mengikuti pembelajaran. Teruslah memperkuat pemahaman dengan belajar secara rutin, mengulas kembali materi yang telah dipelajari, dan memperbanyak latihan agar hasil belajar semakin optimal."
+    : value >= 75
+      ? "Siswa telah memiliki dasar yang cukup untuk mengikuti pembelajaran. Luangkan waktu untuk mengulang materi yang belum dipahami sepenuhnya, berlatih secara teratur, dan aktif mencari pemahaman ketika menemui kesulitan agar kesiapan belajar semakin meningkat."
+      : "Siswa perlu memantapkan kembali pemahaman pada materi prasyarat sebelum mempelajari materi berikutnya. Fokuslah pada penguasaan konsep dasar, berlatih secara bertahap dan konsisten, serta manfaatkan berbagai sumber belajar agar kesiapan belajar semakin baik.";
 
   return `
     ${buildDocHeader(title)}

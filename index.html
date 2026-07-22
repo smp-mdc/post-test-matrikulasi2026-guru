@@ -484,6 +484,7 @@ window.MathJax = {
       <div class="report-actions">
         <button class="btn-secondary" onclick="loadReport(true)">Refresh Report</button>
         <button class="btn-start" onclick="printSelectedReport()">Cetak PDF 2 Halaman A4</button>
+        <button class="btn-dark" onclick="printSelectedAnswers()">Cetak Jawaban Siswa</button>
       </div>
     </div>
 
@@ -1024,6 +1025,576 @@ function printSelectedReport(){
 </html>`);
   printWindow.document.close();
 }
+async function printSelectedAnswers() {
+  const participantId =
+    document.getElementById("reportParticipantSelect")?.value || "";
+
+  if (!participantId) {
+    showReportMessage("Pilih peserta terlebih dahulu.", false);
+    return;
+  }
+
+  const printWindow = window.open(
+    "",
+    "_blank",
+    "width=1100,height=850"
+  );
+
+  if (!printWindow) {
+    showReportMessage(
+      "Pop-up diblokir browser. Izinkan pop-up lalu coba kembali.",
+      false
+    );
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(`<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Memuat Jawaban Siswa</title>
+<style>
+  body{
+    font-family:Arial,Helvetica,sans-serif;
+    padding:40px;
+    text-align:center;
+    color:#24435f;
+  }
+</style>
+</head>
+<body>
+  <h2>Memuat jawaban siswa...</h2>
+  <p>Mohon tunggu.</p>
+</body>
+</html>`);
+  printWindow.document.close();
+
+  try {
+    const res = await api({
+      action: "answerReport",
+      participant_id: participantId
+    });
+
+    if (!res.success || !res.data) {
+      printWindow.close();
+      showReportMessage(
+        res.message || "Gagal memuat jawaban siswa.",
+        false
+      );
+      return;
+    }
+
+    renderAnswerPrintWindow(printWindow, res.data);
+
+  } catch (error) {
+    console.error("Gagal memuat jawaban siswa:", error);
+    printWindow.close();
+    showReportMessage(
+      "Gagal terhubung ke backend jawaban.",
+      false
+    );
+  }
+}
+
+function renderAnswerPrintWindow(printWindow, data) {
+  const tests = Array.isArray(data.tests) ? data.tests : [];
+
+  const testHtml = tests.map(test => {
+    const questions = Array.isArray(test.questions)
+      ? test.questions
+      : [];
+
+    const questionHtml = questions.map((question, index) =>
+      buildPrintedAnswerQuestion(question, index)
+    ).join("");
+
+    return `
+      <section class="test-section">
+        <div class="test-heading">
+          <div>
+            <h2>${esc(test.title || test.test_type || "-")}</h2>
+            <p>
+              Terjawab <b>${Number(test.answered_count) || 0}</b>
+              dari <b>${Number(test.question_count) || 0}</b> soal
+              &nbsp;·&nbsp;
+              Skor <b>${formatAnswerScore(test.score_obtained)}</b>
+              dari <b>${formatAnswerScore(test.max_score)}</b>
+            </p>
+          </div>
+
+          <div class="test-score">
+            <strong>${formatReportNumber(test.value)}</strong>
+            <span>Nilai</span>
+          </div>
+        </div>
+
+        ${questionHtml || "<p>Belum ada soal untuk tes ini.</p>"}
+      </section>
+    `;
+  }).join("");
+
+  const documentHtml = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Jawaban Siswa - ${esc(data.full_name || "")}</title>
+
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\\\(','\\\\)'], ['$', '$']],
+      displayMath: [['\\\\[','\\\\]']]
+    },
+    svg: { fontCache: 'global' }
+  };
+<\/script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"><\/script>
+
+<style>
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:#eef3f8;
+    color:#10243e;
+    font-family:Arial,Helvetica,sans-serif;
+  }
+
+  .document{
+    width:210mm;
+    margin:18px auto;
+    background:#fff;
+    padding:12mm 14mm;
+    box-shadow:0 8px 30px rgba(31,45,61,.14);
+  }
+
+  .header{
+    display:grid;
+    grid-template-columns:64px 1fr;
+    gap:14px;
+    align-items:center;
+    border-bottom:3px solid #2f80ed;
+    padding-bottom:12px;
+    margin-bottom:16px;
+  }
+
+  .logo{
+    width:58px;
+    height:58px;
+    border-radius:14px;
+    border:1px solid #cfe2fb;
+    background:#eaf3ff;
+    color:#1b5fae;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    font-size:19px;
+  }
+
+  .header h1{margin:0 0 4px;font-size:22px}
+  .header p{margin:0;color:#60758a;font-size:12px}
+
+  .student-info{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:6px 22px;
+    background:#f7f9fc;
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:20px;
+  }
+
+  .info-row{
+    display:grid;
+    grid-template-columns:105px 10px 1fr;
+    font-size:12px;
+    line-height:1.5;
+  }
+
+  .test-section{
+    margin-top:24px;
+    page-break-before:always;
+  }
+
+  .student-info + .test-section{
+    page-break-before:auto;
+  }
+
+  .test-heading{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    border-bottom:2px solid #2f80ed;
+    padding-bottom:9px;
+    margin-bottom:16px;
+  }
+
+  .test-heading h2{margin:0 0 4px;font-size:20px}
+  .test-heading p{margin:0;color:#60758a;font-size:11px}
+
+  .test-score{
+    min-width:76px;
+    border:1px solid #cfe2fb;
+    border-radius:12px;
+    background:#eef6ff;
+    padding:8px 12px;
+    text-align:center;
+  }
+
+  .test-score strong{
+    display:block;
+    color:#1b5fae;
+    font-size:22px;
+  }
+
+  .test-score span{
+    font-size:9px;
+    color:#60758a;
+  }
+
+  .answer-question{
+    border-bottom:1px solid #dbe5f0;
+    padding:0 0 16px;
+    margin:0 0 18px;
+    break-inside:avoid;
+    page-break-inside:avoid;
+  }
+
+  .question-title{
+    display:flex;
+    gap:8px;
+    font-size:13px;
+    line-height:1.55;
+    font-weight:700;
+    margin-bottom:10px;
+  }
+
+  .question-number{
+    flex:0 0 auto;
+    color:#1b5fae;
+  }
+
+  .question-media{
+    display:block;
+    max-width:100%;
+    max-height:240px;
+    margin:9px 0;
+    border-radius:8px;
+  }
+
+  .options{
+    margin:8px 0 0 22px;
+  }
+
+  .option{
+    position:relative;
+    padding:7px 32px 7px 10px;
+    margin:5px 0;
+    border-radius:8px;
+    font-size:11px;
+    line-height:1.4;
+    border:1px solid transparent;
+  }
+
+  .option.selected{
+    background:#eef2f8;
+    border-color:#d7dfeb;
+  }
+
+  .option.correct-selected{
+    background:#e6f8ee;
+    border-color:#a8dfbd;
+  }
+
+  .option.wrong-selected{
+    background:#ffeceb;
+    border-color:#f1b8b3;
+  }
+
+  .option.correct-answer{
+    border-color:#2ecc71;
+    border-style:dashed;
+  }
+
+  .answer-mark{
+    position:absolute;
+    right:10px;
+    top:7px;
+    font-weight:900;
+  }
+
+  .answer-mark.correct{color:#209555}
+  .answer-mark.wrong{color:#c0392b}
+
+  .essay-box{
+    margin:9px 0 0 22px;
+    padding:10px 12px;
+    min-height:48px;
+    border:1px solid #d8e0ea;
+    border-radius:9px;
+    background:#f8fafc;
+    white-space:pre-wrap;
+    font-size:11px;
+    line-height:1.55;
+  }
+
+  .answer-meta{
+    margin:8px 0 0 22px;
+    color:#60758a;
+    font-size:9px;
+  }
+
+  @page{
+    size:A4 portrait;
+    margin:10mm;
+  }
+
+  @media print{
+    body{background:#fff!important}
+
+    .document{
+      width:auto;
+      margin:0;
+      padding:0;
+      box-shadow:none;
+    }
+
+    .test-section{page-break-before:always}
+    .student-info + .test-section{page-break-before:auto}
+
+    *{
+      print-color-adjust:exact;
+      -webkit-print-color-adjust:exact;
+    }
+  }
+</style>
+</head>
+
+<body>
+<main class="document">
+  <header class="header">
+    <div class="logo">MDC</div>
+
+    <div>
+      <h1>RINGKASAN JAWABAN SISWA</h1>
+      <p>SMP Kristen Masa Depan Cerah — Post-Test Matrikulasi Siswa Baru</p>
+    </div>
+  </header>
+
+  <section class="student-info">
+    <div class="info-row">
+      <b>Nama Siswa</b><span>:</span>
+      <span>${esc(data.full_name || "-")}</span>
+    </div>
+
+    <div class="info-row">
+      <b>Asal Sekolah</b><span>:</span>
+      <span>${esc(data.school_origin || "-")}</span>
+    </div>
+
+    <div class="info-row">
+      <b>ID Peserta</b><span>:</span>
+      <span>${esc(data.participant_id || "-")}</span>
+    </div>
+
+    <div class="info-row">
+      <b>Status</b><span>:</span>
+      <span>${esc(data.status || "-")}</span>
+    </div>
+  </section>
+
+  ${testHtml}
+</main>
+
+<script>
+  window.addEventListener("load", function(){
+    const doPrint = function(){
+      setTimeout(function(){
+        window.focus();
+        window.print();
+      }, 600);
+    };
+
+    if(window.MathJax && MathJax.typesetPromise){
+      MathJax.typesetPromise().then(doPrint).catch(doPrint);
+    }else{
+      doPrint();
+    }
+  });
+
+  window.addEventListener("afterprint", function(){
+    window.close();
+  });
+<\/script>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(documentHtml);
+  printWindow.document.close();
+}
+
+function buildPrintedAnswerQuestion(question, index) {
+  const questionType =
+    String(question.question_type || "").toUpperCase();
+
+  const studentAnswer =
+    String(question.student_answer || "")
+      .trim()
+      .toUpperCase();
+
+  const correctAnswer =
+    String(question.correct_answer || "")
+      .trim()
+      .toUpperCase();
+
+  const media = question.media_url
+    ? `<img class="question-media"
+         src="${esc(question.media_url)}"
+         onerror="this.style.display='none'">`
+    : "";
+
+  let answerHtml = "";
+
+  if (questionType === "ESSAY") {
+    answerHtml = `
+      <div class="essay-box">${
+        question.student_answer
+          ? esc(question.student_answer)
+          : "<i>Tidak dijawab</i>"
+      }</div>
+
+      <div class="answer-meta">
+        Skor:
+        <b>${formatAnswerScore(question.final_score)}
+        / ${formatAnswerScore(question.max_score)}</b>
+      </div>
+    `;
+  } else {
+    const selectedLetters = studentAnswer
+      .split(",")
+      .map(value => value.trim())
+      .filter(Boolean);
+
+    const correctLetters = correctAnswer
+      .split(",")
+      .map(value => value.trim())
+      .filter(Boolean);
+
+    const options = question.options || {};
+
+    answerHtml = `
+      <div class="options">
+        ${["A","B","C","D","E"]
+          .filter(letter =>
+            String(options[letter] || "").trim()
+          )
+          .map(letter => {
+            const selected = selectedLetters.includes(letter);
+            const correct = correctLetters.includes(letter);
+
+            let classes = "option";
+
+            if (selected) classes += " selected";
+
+            if (question.is_correct === true && selected) {
+              classes += " correct-selected";
+            }
+
+            if (question.is_correct === false && selected) {
+              classes += " wrong-selected";
+            }
+
+            if (questionType !== "KARAKTER" && correct) {
+              classes += " correct-answer";
+            }
+
+            let mark = "";
+
+            if (question.is_correct === true && selected) {
+              mark =
+                '<span class="answer-mark correct">✓</span>';
+            } else if (
+              question.is_correct === false &&
+              selected
+            ) {
+              mark =
+                '<span class="answer-mark wrong">✕</span>';
+            } else if (
+              questionType === "KARAKTER" &&
+              selected
+            ) {
+              mark =
+                '<span class="answer-mark correct">●</span>';
+            }
+
+            return `
+              <div class="${classes}">
+                <b>${letter}.</b>
+                ${esc(options[letter])}
+                ${mark}
+              </div>
+            `;
+          }).join("")}
+      </div>
+
+      <div class="answer-meta">
+        Jawaban siswa:
+        <b>${esc(studentAnswer || "Tidak dijawab")}</b>
+
+        ${
+          questionType !== "KARAKTER"
+            ? `&nbsp; · &nbsp; Jawaban benar:
+               <b>${esc(correctAnswer || "-")}</b>`
+            : ""
+        }
+
+        &nbsp; · &nbsp; Skor:
+        <b>${formatAnswerScore(question.final_score)}
+        / ${formatAnswerScore(question.max_score)}</b>
+      </div>
+    `;
+  }
+
+  return `
+    <article class="answer-question">
+      <div class="question-title">
+        <span class="question-number">${index + 1}.</span>
+        <div>
+          ${question.question_html ||
+            "<i>Pertanyaan tidak tersedia.</i>"}
+        </div>
+      </div>
+
+      ${media}
+      ${answerHtml}
+    </article>
+  `;
+}
+
+function formatAnswerScore(value) {
+  if (
+    value === "" ||
+    value === null ||
+    value === undefined
+  ) {
+    return "-";
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number)
+    ? number.toLocaleString(
+        "id-ID",
+        {maximumFractionDigits:2}
+      )
+    : esc(String(value));
+}
+
 let essayAllItems = [];
 let essayFilteredItems = [];
 let essayCurrentIndex = 0;
